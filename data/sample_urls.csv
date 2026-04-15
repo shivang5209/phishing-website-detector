@@ -1,0 +1,13 @@
+url,label
+https://www.google.com,legitimate
+https://www.wikipedia.org,legitimate
+https://www.github.com,legitimate
+https://www.microsoft.com,legitimate
+https://support-paypal-login-account.example.com/verify,phishing
+http://192.168.1.15/login/update,phishing
+http://bit.ly/free-gift-card,phishing
+http://account-security-check.example.net/reset-password,phishing
+https://www.stackoverflow.com,legitimate
+https://www.python.org,legitimate
+http://paypal.verify-session.example.org/login,phishing
+http://banking-secure-update.example.com/auth,phishing

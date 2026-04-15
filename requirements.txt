@@ -1,0 +1,8 @@
+Flask>=3.0,<4.0
+requests>=2.31,<3.0
+beautifulsoup4>=4.12,<5.0
+scikit-learn>=1.4,<2.0
+pandas>=2.0,<3.0
+numpy>=1.24,<3.0
+xgboost>=2.0,<3.0
+python-whois>=0.9,<1.0
