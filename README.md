@@ -114,5 +114,6 @@ python -m unittest discover -s tests -v
 
 - Live checks are best-effort and can fail without stopping the analysis.
 - External reputation lookup is enabled by default and can be disabled with `ENABLE_REPUTATION_LOOKUPS=0`.
+- Stitch redesign source files are stored in `stitch_phishing_detector_ui_redesign/` for design reference and iteration history.
 - The bundled sample dataset is only for demonstration and pipeline verification.
 - Replace it with a real public phishing dataset for better model quality.
