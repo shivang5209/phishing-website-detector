@@ -9,6 +9,10 @@ REQUEST_TIMEOUT_SECONDS = 5
 HTTP_USER_AGENT = "PhishingDetectorMVP/1.0"
 REPUTATION_LOOKUP_TIMEOUT_SECONDS = 4
 ENABLE_REPUTATION_LOOKUPS = os.getenv("ENABLE_REPUTATION_LOOKUPS", "1").strip().lower() not in {"0", "false", "no"}
+API_AUTH_TOKEN = os.getenv("API_AUTH_TOKEN", "").strip()
+API_REQUIRE_AUTH = os.getenv("API_REQUIRE_AUTH", "1").strip().lower() not in {"0", "false", "no"}
+API_RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("API_RATE_LIMIT_WINDOW_SECONDS", "60"))
+API_RATE_LIMIT_MAX_REQUESTS = int(os.getenv("API_RATE_LIMIT_MAX_REQUESTS", "30"))
 
 SUSPICIOUS_TLDS = {
     "zip",

@@ -42,6 +42,22 @@ python -m phishing_detector.training --data data/sample_urls.csv --artifact data
 python app.py
 ```
 
+## API Security Settings
+
+The JSON endpoint `POST /api/analyze` supports optional token auth and built-in rate limiting.
+
+```text
+API_REQUIRE_AUTH=1
+API_AUTH_TOKEN=replace-with-strong-token
+API_RATE_LIMIT_WINDOW_SECONDS=60
+API_RATE_LIMIT_MAX_REQUESTS=30
+```
+
+Send token via:
+
+- `Authorization: Bearer <token>`
+- or `X-API-Key: <token>`
+
 ## App Pages
 
 - `/` dashboard + single URL analyzer
@@ -88,6 +104,26 @@ Supported dataset styles:
 
 - Raw URL datasets with columns like `url`, `URL`, `Domain`, `website`
 - Engineered-feature datasets with numeric phishing features plus a label column
+
+## Kaggle Dataset Workflow (Recommended)
+
+1. Download a phishing URL dataset CSV from Kaggle.
+2. Place it under `data/` (example: `data/kaggle_phishing_urls.csv`).
+3. Ensure it has at least one URL-like column (`url`, `URL`, `Domain`, `website`, etc.) and one label column (`label`, `class`, `result`, etc.).
+4. Train and generate full artifacts:
+
+```bash
+python -m phishing_detector.training --data data/kaggle_phishing_urls.csv --artifact data/model_artifact.pkl
+```
+
+5. Review quality in:
+
+- `data/model_artifact_report.json`
+- `data/model_artifact_summary.md`
+- `data/model_artifact_plots/`
+
+Tip:
+- Use a larger dataset for realistic metrics and fewer overfitting artifacts.
 
 Note:
 - Engineered-feature artifacts are for offline experimentation.

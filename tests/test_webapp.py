@@ -152,6 +152,55 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn(b"URL is required.", response.data)
 
+    @patch("phishing_detector.webapp.API_REQUIRE_AUTH", True)
+    @patch("phishing_detector.webapp.API_AUTH_TOKEN", "secret-token")
+    @patch("phishing_detector.webapp.analyze_url")
+    def test_api_analyze_requires_auth_token(self, mock_analyze):
+        mock_analyze.return_value = AnalysisResult(
+            normalized_url="https://example.com/login",
+            verdict="Phishing",
+            risk_score=82,
+            probability=0.82,
+            explanation_items=["URL uses a shortening service."],
+            warnings=[],
+            features={"https_scheme": 0.0},
+            suspicious_signals=["URL uses a shortening service."],
+            reassuring_signals=[],
+            feature_sections=[],
+        )
+        response = self.client.post("/api/analyze", json={"url": "https://example.com/login"})
+        self.assertEqual(response.status_code, 401)
+
+        response = self.client.post(
+            "/api/analyze",
+            json={"url": "https://example.com/login"},
+            headers={"Authorization": "Bearer secret-token"},
+        )
+        self.assertEqual(response.status_code, 200)
+
+    @patch("phishing_detector.webapp.API_RATE_LIMIT_MAX_REQUESTS", 1)
+    @patch("phishing_detector.webapp.API_RATE_LIMIT_WINDOW_SECONDS", 60)
+    @patch("phishing_detector.webapp.analyze_url")
+    def test_api_analyze_rate_limit(self, mock_analyze):
+        local_client = create_app().test_client()
+        mock_analyze.return_value = AnalysisResult(
+            normalized_url="https://example.com/login",
+            verdict="Legitimate",
+            risk_score=12,
+            probability=0.12,
+            explanation_items=["No strong phishing indicators were triggered by the current checks."],
+            warnings=[],
+            features={"https_scheme": 1.0},
+            suspicious_signals=[],
+            reassuring_signals=[],
+            feature_sections=[],
+        )
+        response_one = local_client.post("/api/analyze", json={"url": "https://example.com/login"})
+        self.assertEqual(response_one.status_code, 200)
+
+        response_two = local_client.post("/api/analyze", json={"url": "https://example.com/login"})
+        self.assertEqual(response_two.status_code, 429)
+
     @patch("phishing_detector.webapp.record_batch_run")
     @patch("phishing_detector.webapp.build_batch_summary")
     @patch("phishing_detector.webapp.analyze_batch_csv")
