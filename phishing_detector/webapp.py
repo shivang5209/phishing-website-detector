@@ -134,6 +134,22 @@ def create_app() -> Flask:
         except Exception as exc:
             return Response(f"Analysis failed: {exc}", status=500, mimetype="text/plain")
 
+    @app.post("/api/analyze")
+    def api_analyze():
+        payload = request.get_json(silent=True) or {}
+        url_value = payload.get("url", "")
+        try:
+            result = analyze_url(url_value)
+            record_single_analysis(result)
+            body = build_analysis_json(result)
+            return Response(body, mimetype="application/json")
+        except ValueError as exc:
+            return Response(str(exc), status=400, mimetype="text/plain")
+        except FileNotFoundError as exc:
+            return Response(str(exc), status=500, mimetype="text/plain")
+        except Exception as exc:
+            return Response(f"Analysis failed: {exc}", status=500, mimetype="text/plain")
+
     @app.get("/training-report")
     def training_report():
         try:
