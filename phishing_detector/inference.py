@@ -46,7 +46,9 @@ def _heuristic_adjustment(extraction: FeatureExtractionResult) -> float:
     suspicious += 0.08 if extraction.features["password_field_count"] > 0 else 0.0
     suspicious += 0.08 if extraction.features["title_brand_mismatch"] else 0.0
     suspicious += 0.05 if extraction.features["external_link_ratio"] > 0.8 else 0.0
+    suspicious += 0.1 if extraction.features.get("reputation_blacklist_hit", 0.0) else 0.0
     suspicious += min(extraction.features["phishing_keyword_count_content"] * 0.02, 0.1)
+    suspicious += min(extraction.features.get("stemmed_keyword_count_content", 0.0) * 0.01, 0.05)
     suspicious -= 0.05 if extraction.features["https_scheme"] and extraction.features["ssl_available"] else 0.0
     return suspicious
 
@@ -88,6 +90,8 @@ def _build_feature_sections(features: Dict[str, float]) -> List[Dict]:
                 {"label": "External Link Ratio", "value": f"{features['external_link_ratio']:.3f}"},
                 {"label": "Title/Brand Mismatch", "value": "Yes" if features["title_brand_mismatch"] else "No"},
                 {"label": "Content Keyword Hits", "value": int(features["phishing_keyword_count_content"])},
+                {"label": "Stemmed Keyword Hits", "value": int(features.get("stemmed_keyword_count_content", 0.0))},
+                {"label": "Blacklist Reputation Hit", "value": "Yes" if features.get("reputation_blacklist_hit", 0.0) else "No"},
             ],
         },
     ]
@@ -105,6 +109,8 @@ def _build_reassuring_signals(features: Dict[str, float]) -> List[str]:
         reassuring.append("The URL uses a hostname instead of a raw IP address.")
     if not features["title_brand_mismatch"] and features["page_fetch_success"]:
         reassuring.append("The fetched page title did not show an obvious brand mismatch.")
+    if not features.get("reputation_blacklist_hit", 0.0):
+        reassuring.append("The URL was not found in the external reputation feed lookup.")
     return reassuring[:5]
 
 

@@ -126,6 +126,32 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn(b"URL is required.", response.data)
 
+    @patch("phishing_detector.webapp.record_single_analysis")
+    @patch("phishing_detector.webapp.analyze_url")
+    def test_api_analyze_returns_json(self, mock_analyze, mock_record):
+        mock_analyze.return_value = AnalysisResult(
+            normalized_url="https://example.com/login",
+            verdict="Phishing",
+            risk_score=82,
+            probability=0.82,
+            explanation_items=["URL uses a shortening service."],
+            warnings=["DNS lookup failed."],
+            features={"https_scheme": 0.0},
+            suspicious_signals=["URL uses a shortening service."],
+            reassuring_signals=["The URL uses a hostname instead of a raw IP address."],
+            feature_sections=[{"title": "URL Signals", "rows": [{"label": "URL Length", "value": 25}]}],
+        )
+        response = self.client.post("/api/analyze", json={"url": "https://example.com/login"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, "application/json")
+        self.assertIn(b'"verdict": "Phishing"', response.data)
+        mock_record.assert_called_once()
+
+    def test_api_analyze_invalid_url_returns_400(self):
+        response = self.client.post("/api/analyze", json={"url": ""})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn(b"URL is required.", response.data)
+
     @patch("phishing_detector.webapp.record_batch_run")
     @patch("phishing_detector.webapp.build_batch_summary")
     @patch("phishing_detector.webapp.analyze_batch_csv")

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ipaddress
 import importlib
+import json
 import math
 import re
 import socket
@@ -11,12 +12,31 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from html.parser import HTMLParser
 from typing import Dict, List, Optional, Sequence
-from urllib.parse import urlparse
+from urllib.parse import urlencode, urlparse
 from urllib.request import Request, urlopen
 
-from .config import HTTP_USER_AGENT, PHISHING_KEYWORDS, REQUEST_TIMEOUT_SECONDS, SHORTENER_DOMAINS, SUSPICIOUS_TLDS
+from .config import (
+    ENABLE_REPUTATION_LOOKUPS,
+    HTTP_USER_AGENT,
+    PHISHING_KEYWORDS,
+    REPUTATION_LOOKUP_TIMEOUT_SECONDS,
+    REQUEST_TIMEOUT_SECONDS,
+    SHORTENER_DOMAINS,
+    SUSPICIOUS_TLDS,
+)
 
 SUSPICIOUS_BRANDS = ("paypal", "google", "microsoft", "amazon", "apple", "bank", "instagram", "facebook")
+TOKEN_PATTERN = re.compile(r"[a-zA-Z0-9]{2,}")
+
+try:
+    from nltk.stem import PorterStemmer
+except Exception:  # pragma: no cover - optional dependency at runtime
+    PorterStemmer = None
+
+_STEMMER = PorterStemmer() if PorterStemmer is not None else None
+_STEMMED_KEYWORDS = set()
+if _STEMMER is not None:
+    _STEMMED_KEYWORDS = {_STEMMER.stem(token) for keyword in PHISHING_KEYWORDS for token in TOKEN_PATTERN.findall(keyword.lower())}
 
 
 @dataclass
@@ -113,6 +133,13 @@ def _suspicious_keyword_count(value: str) -> int:
     return sum(1 for keyword in PHISHING_KEYWORDS if keyword in lowered)
 
 
+def _stemmed_keyword_count(value: str) -> int:
+    if _STEMMER is None or not _STEMMED_KEYWORDS:
+        return 0
+    stems = {_STEMMER.stem(token.lower()) for token in TOKEN_PATTERN.findall(value.lower())}
+    return sum(1 for keyword in _STEMMED_KEYWORDS if keyword in stems)
+
+
 def _fetch_html(normalized_url: str) -> str:
     request = Request(normalized_url, headers={"User-Agent": HTTP_USER_AGENT})
     with urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
@@ -132,6 +159,29 @@ def _ssl_days_remaining(hostname: str) -> Optional[int]:
             expires = ssl.cert_time_to_seconds(cert["notAfter"])
             remaining = max(expires - time.time(), 0)
             return int(remaining // 86400)
+
+
+def _urlhaus_reputation_hit(normalized_url: str) -> Optional[bool]:
+    body = urlencode({"url": normalized_url}).encode("utf-8")
+    request = Request(
+        "https://urlhaus-api.abuse.ch/v1/url/",
+        data=body,
+        headers={
+            "User-Agent": HTTP_USER_AGENT,
+            "Content-Type": "application/x-www-form-urlencoded",
+        },
+        method="POST",
+    )
+    with urlopen(request, timeout=REPUTATION_LOOKUP_TIMEOUT_SECONDS) as response:
+        payload = json.loads(response.read().decode("utf-8", errors="ignore") or "{}")
+    status = str(payload.get("query_status", "")).lower()
+    if not status:
+        return None
+    if status in {"ok", "hit"}:
+        return True
+    if status in {"no_results", "not_found"}:
+        return False
+    return None
 
 
 def _domain_age_days(hostname: str) -> Optional[int]:
@@ -213,6 +263,8 @@ FEATURE_COLUMNS = [
     "external_link_ratio",
     "title_brand_mismatch",
     "phishing_keyword_count_content",
+    "stemmed_keyword_count_content",
+    "reputation_blacklist_hit",
 ]
 
 
@@ -256,6 +308,8 @@ def build_feature_vector(raw_url: str) -> FeatureExtractionResult:
         "external_link_ratio": 0.0,
         "title_brand_mismatch": 0.0,
         "phishing_keyword_count_content": 0.0,
+        "stemmed_keyword_count_content": 0.0,
+        "reputation_blacklist_hit": 0.0,
     }
     warnings: List[str] = []
     signals: List[str] = []
@@ -299,6 +353,7 @@ def build_feature_vector(raw_url: str) -> FeatureExtractionResult:
             features["external_link_ratio"] = parser.links_external / max(total_links, 1)
             content_keywords = _suspicious_keyword_count(html.lower())
             features["phishing_keyword_count_content"] = float(content_keywords)
+            features["stemmed_keyword_count_content"] = float(_stemmed_keyword_count(html))
             if parser.title and hostname:
                 title = parser.title.lower()
                 domain_token = hostname.split(".")[-2] if "." in hostname else hostname
@@ -307,6 +362,15 @@ def build_feature_vector(raw_url: str) -> FeatureExtractionResult:
             warnings.append("Remote page was reachable but not HTML.")
     except Exception:
         warnings.append("Page content fetch failed.")
+
+    if ENABLE_REPUTATION_LOOKUPS:
+        try:
+            reputation_hit = _urlhaus_reputation_hit(normalized_url)
+            if reputation_hit is True:
+                features["reputation_blacklist_hit"] = 1.0
+                signals.append("External URL reputation feed marked this URL as malicious.")
+        except Exception:
+            warnings.append("External reputation lookup unavailable.")
 
     if features["at_symbol_present"]:
         signals.append("URL contains '@', which is commonly used to obfuscate links.")
@@ -322,10 +386,14 @@ def build_feature_vector(raw_url: str) -> FeatureExtractionResult:
         signals.append("URL appears highly random or encoded.")
     if features["password_field_count"] > 0 and features["phishing_keyword_count_content"] > 0:
         signals.append("Page combines credential inputs with phishing-related language.")
+    if features["stemmed_keyword_count_content"] >= 3:
+        signals.append("Content includes multiple stemmed phishing terms.")
     if features["title_brand_mismatch"]:
         signals.append("Page title references a brand that does not match the domain.")
     if features["external_link_ratio"] > 0.8:
         signals.append("Most links on the page point to external destinations.")
+    if features["reputation_blacklist_hit"]:
+        signals.append("URL appears in an external phishing/malware reputation feed.")
 
     return FeatureExtractionResult(
         normalized_url=normalized_url,

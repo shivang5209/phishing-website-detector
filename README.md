@@ -7,6 +7,7 @@ Local MVP for phishing website detection using a Flask web app, multi-layer feat
 - Single URL analysis with risk score and explanation
 - Full detail page for one analyzed URL
 - JSON and Markdown export for a single analysis
+- JSON API endpoint for programmatic analysis
 - Training report page with metrics and evaluation plots
 - Batch CSV analysis with downloadable results
 - Recent activity tracking
@@ -47,6 +48,7 @@ python app.py
 - `/analysis-detail?url=...` full explanation for one URL
 - `/analysis-export.json?url=...` JSON export for one URL
 - `/analysis-export.md?url=...` Markdown export for one URL
+- `/api/analyze` POST JSON API for one URL
 - `/training-report` model metrics and evaluation plots
 - `/batch-analysis` batch CSV upload and preview
 - `/settings` read-only runtime configuration view
@@ -111,5 +113,6 @@ python -m unittest discover -s tests -v
 ## Notes
 
 - Live checks are best-effort and can fail without stopping the analysis.
+- External reputation lookup is enabled by default and can be disabled with `ENABLE_REPUTATION_LOOKUPS=0`.
 - The bundled sample dataset is only for demonstration and pipeline verification.
 - Replace it with a real public phishing dataset for better model quality.
